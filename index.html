@@ -10,7 +10,6 @@
         /* 使用 Inter 字體作為主要字體 */
         body {
             font-family: 'Inter', 'Noto Sans TC', sans-serif;
-            /* 將背景色更改為柔和的粉紅色 */
             background-color: #fce7f3; 
         }
         /* 定義計時器環狀進度條的樣式 */
@@ -64,6 +63,14 @@
             @apply bg-blue-500 text-white;
         }
 
+        /* 學測倒數樣式 */
+        .gsat-countdown {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #f97316;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
         /* 響應式調整 */
         @media (max-width: 640px) {
             .timer-ring {
@@ -72,6 +79,9 @@
             }
             .time-display {
                 font-size: 4rem !important;
+            }
+            .gsat-countdown {
+                font-size: 2rem;
             }
         }
     </style>
@@ -123,7 +133,7 @@
                 番茄鐘循環: <span id="cycle-count" class="text-blue-600 font-bold">0</span> 次
             </div>
             <div class="text-gray-700">
-                學測倒數: <span id="gsat-countdown" class="text-orange-600 font-bold">載入中...</span>
+                <span id="gsat-countdown" class="gsat-countdown">載入中...</span>
             </div>
         </div>
 
@@ -146,7 +156,7 @@
         </div>
 
         <div id="message-box" class="mt-6 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded-lg hidden">
-            </div>
+        </div>
 
     </div>
 
@@ -163,7 +173,7 @@
         let timeLeft = TIMES.focus;
         let isRunning = false;
         let timerInterval = null;
-        let cyclesCompleted = 0; // 完成的專注 (Focus) 循環次數
+        let cyclesCompleted = 0;
 
         // DOM 元素
         const timeDisplay = document.getElementById('time-display');
@@ -174,18 +184,16 @@
         const gsatCountdownElement = document.getElementById('gsat-countdown');
         const modeButtons = document.querySelectorAll('.mode-btn');
         const messageBox = document.getElementById('message-box');
-        // 新增 LLM 相關元素
         const llmOutput = document.getElementById('llm-output');
         const geminiBtn = document.getElementById('gemini-btn');
 
-        // --- 聲音物件 (使用瀏覽器內建音效) ---
-        // 外部連結的音效，確保在大多數瀏覽器中都能播放。
-        const ALARM_SOUND = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-bell-notification-980.mp3'); 
+        // 聲音物件
+        const ALARM_SOUND = new Audio('https://www.soundjay.com/buttons/beep-01a.mp3');
 
-        // GSAT 倒數目標日 (已修正為 民國 115 年 1 月 17 日)
+        // GSAT 倒數目標日
         const GSAT_TARGET_DATE = new Date('2026-01-17T00:00:00');
 
-        // --- 激勵話語 ---
+        // 激勵話語
         const MESSAGES = {
             focusStart: '衝刺！現在是專注時間，模擬考場狀態！',
             focusRunning: '離滿級分又近了一點！堅持住！',
@@ -196,7 +204,6 @@
             longBreakComplete: '重新啟動！你即將成為狀元！',
         };
 
-        // --- 模擬 Gemini 輸出的學測鼓勵語句 (本地運行版) ---
         const GSAT_MOTIVATIONS = [
             '學測倒數，每一分鐘都是分數！拋開雜念，專注眼前的公式。',
             '你已經進入模擬考場狀態！寫考卷時就是這個感覺，穩住！',
@@ -207,25 +214,17 @@
             '記住：競爭者此時可能正在放鬆，你的堅持就是勝利！',
             '每一個專注的番茄鐘，都在累積你的學測高分存摺。',
         ];
-        
+
         /**
          * 更新番茄鐘顯示
          */
         function updateDisplay() {
-            // 1. 計算分與秒
             const minutes = Math.floor(timeLeft / 60);
             const seconds = timeLeft % 60;
-
-            // 2. 格式化時間 (加上前導零)
             timeDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            
-            // 3. 計算進度百分比，並更新圓環樣式
             const totalTime = TIMES[currentMode];
             const progressPercent = ((totalTime - timeLeft) / totalTime) * 100;
-            // --progress 是 CSS 變數，用於控制 conic-gradient 漸變的角度
             timerRing.style.setProperty('--progress', `${progressPercent}%`);
-
-            // 4. 更新網頁標題 (在背景也能看到剩餘時間)
             document.title = `(${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}) - 衝刺番茄鐘`;
         }
 
@@ -237,55 +236,50 @@
                 timeLeft--;
                 updateDisplay();
             } else {
-                // 時間到
                 clearInterval(timerInterval);
                 isRunning = false;
                 startPauseBtn.textContent = '開始';
-                
-                // 【✅ 新增】播放提醒音效
-                ALARM_SOUND.play(); 
-
-                // 處理循環邏輯
+                playAlarmSound();
                 if (currentMode === 'focus') {
                     cyclesCompleted++;
                     cycleCountElement.textContent = cyclesCompleted;
                     statusText.textContent = MESSAGES.focusComplete;
-                    
-                    // 檢查是否達到長休息條件 (每 4 個專注循環)
                     if (cyclesCompleted % 4 === 0) {
-                        setMode('longBreak', true); // 強制進入長休息
+                        setMode('longBreak', true);
                     } else {
-                        setMode('shortBreak', true); // 強制進入短休息
+                        setMode('shortBreak', true);
                     }
                 } else if (currentMode === 'shortBreak') {
                     statusText.textContent = MESSAGES.shortBreakComplete;
-                    setMode('focus', true); // 回到專注
+                    setMode('focus', true);
                 } else if (currentMode === 'longBreak') {
                     statusText.textContent = MESSAGES.longBreakComplete;
-                    setMode('focus', true); // 回到專注
+                    setMode('focus', true);
                 }
-
-                // 顯示提示框
                 showMessage(`時間到！已切換至 ${currentMode === 'focus' ? '專注' : '休息'} 模式。`);
             }
         }
 
         /**
+         * 播放提醒音效
+         */
+        function playAlarmSound() {
+            ALARM_SOUND.play().catch(error => {
+                console.error('音效播放失敗:', error);
+                showMessage('音效無法播放，請檢查瀏覽器設定或使用其他瀏覽器。');
+            });
+        }
+
+        /**
          * 設置番茄鐘模式
-         * @param {string} mode - 'focus', 'shortBreak', 'longBreak'
-         * @param {boolean} [autoStart=false] - 是否在設置後立即啟動計時器
          */
         function setMode(mode, autoStart = false) {
             currentMode = mode;
             timeLeft = TIMES[mode];
-
-            // 樣式切換：移除所有按鈕的 active 樣式，再加給當前按鈕
             modeButtons.forEach(btn => btn.classList.remove('active', 'bg-blue-500', 'text-white'));
             modeButtons.forEach(btn => btn.classList.add('bg-gray-200', 'text-gray-700'));
             document.getElementById(`${mode}-mode-btn`).classList.add('active', 'bg-blue-500', 'text-white');
             document.getElementById(`${mode}-mode-btn`).classList.remove('bg-gray-200', 'text-gray-700');
-            
-            // 更新狀態文字
             if (mode === 'focus') {
                 statusText.textContent = MESSAGES.focusStart;
             } else if (mode === 'shortBreak') {
@@ -293,16 +287,10 @@
             } else if (mode === 'longBreak') {
                 statusText.textContent = MESSAGES.longBreakStart;
             }
-            
-            // 重設計時器狀態
             clearInterval(timerInterval);
             isRunning = false;
             startPauseBtn.textContent = '開始';
-            
-            // 更新顯示
             updateDisplay();
-
-            // 如果設定為自動啟動
             if (autoStart) {
                 startPauseTimer();
             }
@@ -313,22 +301,18 @@
          */
         function startPauseTimer() {
             if (isRunning) {
-                // 暫停
                 clearInterval(timerInterval);
                 startPauseBtn.textContent = '繼續';
                 isRunning = false;
                 showMessage('計時器已暫停。休息一下，但別太久！');
             } else {
-                // 開始
-                timerInterval = setInterval(countdown, 1000); // 每秒呼叫 countdown
+                timerInterval = setInterval(countdown, 1000);
                 startPauseBtn.textContent = '暫停';
                 isRunning = true;
-                
-                // 更新狀態文字
                 if (currentMode === 'focus') {
                     statusText.textContent = MESSAGES.focusRunning;
                 }
-                hideMessage(); // 開始後隱藏提示
+                hideMessage();
             }
         }
 
@@ -339,57 +323,42 @@
             clearInterval(timerInterval);
             isRunning = false;
             startPauseBtn.textContent = '開始';
-            setMode(currentMode); // 重新載入當前模式的時間
+            setMode(currentMode);
             showMessage('計時器已重設。深呼吸，準備下一回合！');
         }
 
         /**
-         * 產生鼓勵語句 (本地模擬版)
+         * 產生鼓勵語句
          */
         function generateMotivation() {
-            // 在產生語句時，將 LLM 輸出區塊先清空並顯示載入中
             llmOutput.innerHTML = `<span class="text-purple-600 animate-pulse">導師正在醞釀最強鼓勵...</span>`;
-            
-            // 模擬延遲 1-2 秒，讓使用者有「生成」的體驗
             setTimeout(() => {
                 if (currentMode !== 'focus') {
-                    // 非專注模式的提示
                     llmOutput.textContent = '老師建議：鼓勵留給專注時！休息時請好好放鬆，不要看手機喔！';
                     return;
                 }
-
-                // 隨機選取一句鼓勵語句
                 const randomIndex = Math.floor(Math.random() * GSAT_MOTIVATIONS.length);
                 const motivation = GSAT_MOTIVATIONS[randomIndex];
-                
-                // 顯示結果
                 llmOutput.innerHTML = `「${motivation}」<br><span class="text-xs text-gray-400 mt-1 block">—— 你的學測導師 敬上</span>`;
-
-            }, 1500); // 模擬 1.5 秒的 API 延遲
+            }, 1500);
         }
-
 
         /**
          * 更新學測倒數日數
          */
         function updateGsatCountdown() {
             const now = new Date();
-            // 計算毫秒差 (目標日期 - 當前時間)
             const difference = GSAT_TARGET_DATE.getTime() - now.getTime();
-            
-            if (difference < 0) {
+            if (difference <= 0) {
                 gsatCountdownElement.textContent = '學測已結束！';
                 return;
             }
-
-            // 轉換為天數 (向上取整確保當天也算一天)
             const days = Math.ceil(difference / (1000 * 60 * 60 * 24));
             gsatCountdownElement.textContent = `${days} 天`;
         }
 
         /**
          * 顯示提示訊息框
-         * @param {string} message - 要顯示的訊息
          */
         function showMessage(message) {
             messageBox.textContent = message;
@@ -403,15 +372,13 @@
             messageBox.classList.add('hidden');
         }
 
-        // 初始化：頁面載入時執行
+        // 初始化
         document.addEventListener('DOMContentLoaded', () => {
-            // 設置為專注模式並更新顯示
-            setMode('focus'); 
-            // 初始化 GSAT 倒數 (並設定每分鐘更新一次)
+            setMode('focus');
             updateGsatCountdown();
-            setInterval(updateGsatCountdown, 60000); 
+            setTimeout(updateGsatCountdown, 100);
+            setInterval(updateGsatCountdown, 60000);
         });
-
     </script>
 </body>
 </html>
