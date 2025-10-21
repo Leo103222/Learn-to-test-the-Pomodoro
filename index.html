@@ -178,8 +178,11 @@
         const llmOutput = document.getElementById('llm-output');
         const geminiBtn = document.getElementById('gemini-btn');
 
+        // --- 聲音物件 (使用瀏覽器內建音效) ---
+        // 外部連結的音效，確保在大多數瀏覽器中都能播放。
+        const ALARM_SOUND = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-bell-notification-980.mp3'); 
 
-        // GSAT 倒數目標日 (已更新為 2026/1/17)
+        // GSAT 倒數目標日 (已修正為 民國 115 年 1 月 17 日)
         const GSAT_TARGET_DATE = new Date('2026-01-17T00:00:00');
 
         // --- 激勵話語 ---
@@ -239,9 +242,8 @@
                 isRunning = false;
                 startPauseBtn.textContent = '開始';
                 
-                // 播放提醒音效 (可以使用瀏覽器 Audio API)
-                // const audio = new Audio('alarm.mp3'); 
-                // audio.play();
+                // 【✅ 新增】播放提醒音效
+                ALARM_SOUND.play(); 
 
                 // 處理循環邏輯
                 if (currentMode === 'focus') {
@@ -372,7 +374,7 @@
          */
         function updateGsatCountdown() {
             const now = new Date();
-            // 計算毫秒差
+            // 計算毫秒差 (目標日期 - 當前時間)
             const difference = GSAT_TARGET_DATE.getTime() - now.getTime();
             
             if (difference < 0) {
@@ -380,7 +382,7 @@
                 return;
             }
 
-            // 轉換為天數
+            // 轉換為天數 (向上取整確保當天也算一天)
             const days = Math.ceil(difference / (1000 * 60 * 60 * 24));
             gsatCountdownElement.textContent = `${days} 天`;
         }
